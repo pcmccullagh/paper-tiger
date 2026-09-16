@@ -227,6 +227,8 @@ Additionally: it needs a regime filter, which is itself a fitted parameter, and 
 **D. Volume-spike continuation**
 1-minute volume > 5× the ticker's own trailing 20-min average, with price displacement in the same direction. Within-ticker ratio, so IEX-safe. Fast-decaying: the edge, if any, lives in the following 5–15 minutes. This is the family most likely to be genuinely arbitraged away — and, being within-ticker, it is the family the free stack damages least.
 
+**Signal D: Z-score ranking approach (2026-09-16).** The correct way to detect volume anomalies with IEX-only data is not an absolute threshold (`volume > 5× trailing`) but statistical ranking: `volume_zscore(ticker, time_of_day, trailing_20d) > 2.5`. Reasoning: (1) IEX systematically understates consolidated volume, so a "5×" multiplier lacks a stable reference; (2) a 1-minute print that is anomalous for a $500M name may be ordinary for a $50B name, but a Z-score normalizes both; (3) cross-sectional ranking within the day's eligible universe preserves the signal when IEX's market share drifts. Source: adapted from a cross-sectional order-book imbalance technique (originally L2, adapted to L1 for Alpaca free tier). The core insight — "rank, don't threshold" — generalizes beyond any one asset class.
+
 **E. News catalyst**
 Headline timestamped in the last 30 minutes, on a ticker already qualified by A–D. Do **not** use news as a primary trigger — timestamp fidelity is too poor (§3.4). Use it as a *filter*: "does this gapper have an identifiable reason?" and as a *veto*: offering, dilution, going-concern, reverse split → no entry, regardless of what the model says.
 
@@ -862,6 +864,13 @@ You will try many configurations. Every one you try inflates the best result you
 
 - Keep the `experiments` table from §7.9 running through Part II: every backtest run, its parameters, its result, timestamped. **Append-only.** No deleting the failures — the count of failures is a required input to interpreting the winner.
 - Apply a deflated Sharpe ratio adjustment using the trial count. With 100 trials on random data, an in-sample Sharpe near 1.5 is the *expected* maximum. A Sharpe of 1.2 after 100 trials is evidence of nothing.
+
+**Calibration ceilings (2026-09-16).** Practitioner evidence and prior work establish these guardrails:
+- Any backtest with **Sharpe > 3.0** on the daily series is almost certainly overfitted — trigger an automatic review, not celebration
+- **Realistic target** for a single-family intraday strategy on free data: Sharpe 1.0–2.0 on the daily series. A strategy claiming Sharpe 5.0 is reporting a bug, not a result
+- **Feature engineering > model complexity.** Spend 90% of effort on features, 10% on model. A better feature on a linear model beats a worse feature on a gradient-boosted tree
+- **Public strategy edges decay.** Paper Tiger's edge, if one exists, comes from execution details and regime awareness, not from novel concepts — any concept simple enough to explain in a paragraph is simple enough to be known
+- **Discipline drift.** Log every signal override and trade skip to detect drift. A strategy that drifts from its own documented rules has no measurable edge — you're trading discretion, not the system
 - Reserve a **final holdout**: the most recent 3 months, untouched, looked at exactly **once**, at the end. If you look twice, it's not a holdout — regenerate it from newly elapsed forward data instead. **Note that Part I already consumed one holdout** (§7.9); Part II's must be a *different, later* window, which in practice means forward data accumulated during weeks 4–8. Reusing Part I's holdout for Part II is the same error as looking twice.
 
 ### 7.19 Required metrics
@@ -869,6 +878,11 @@ You will try many configurations. Every one you try inflates the best result you
 Per fold and overall: trade count, distinct trading days, win rate, average win/loss in R, expectancy in R, profit factor, max drawdown ($ and %), longest losing streak, Sharpe on the *daily* series, % of P&L from the single best day, average holding minutes, average spread paid in bps, count of time-barrier exits, and **the ratio of Part II expectancy to the Part I E\* point estimate** — that ratio is your first real measurement of how much execution costs you, and §8.1 will ask for it again against shadow data.
 
 **The single-best-day metric is the most diagnostically useful number here.** If removing the top day flips the strategy negative, you have a lottery ticket, not an edge.
+
+**Shadow-mode reporting: pre-register these metrics (2026-09-16).** Define before data flows, so you cannot adjust them after seeing results:
+- **Per-trade edge** = (avg_win × win_rate) − (avg_loss × loss_rate), in R. This is the headline number — a strategy with positive Sharpe but negative per-trade edge after costs is trading too much
+- **Daily Sharpe** = mean(daily_pnl) / std(daily_pnl) × √252. Bootstrap 95% CI by resampling whole days (block bootstrap). With N=60–120 shadow trades, expect a CI width of ±0.4–0.8 on annualized Sharpe — report the CI, not just the point estimate
+- **Opportunity-cost framing.** At $1,000 nominal, the primary deliverable of shadow mode is the **measurement itself** — a defensible answer to "does this work?" — not the P&L. The go/no-go benchmark is opportunity cost of developer time (3 months × hourly rate), not SPY's annual return, because the capital at risk is zero during shadow mode. If the edge per trade is real but the expected annual P&L can't cover that opportunity cost at scale, "fund" is still the wrong answer
 
 ---
 
@@ -1030,6 +1044,10 @@ Ranked by how likely each is to be what actually kills this.
 8. **Operational drag.** Three hours a day, every weekday, for three months of shadow mode, mostly watching nothing happen. This is the most common reason projects like this end — not a blown account, just attrition. The daily report (§10.2) is partly a defense against this: it makes the accumulating evidence visible on days when nothing trades.
 
 ---
+
+## 14. External Research (2026-09-16)
+
+**r/AIinvesting scouted** on 2026-09-16. Verdict: **0 HIGH / 3 MEDIUM / 22+ LOW relevance.** The subreddit is near-dead (~1 post/month), dominated by FINQ content marketing in 2024. The three posts of marginal relevance yielded the Signal D Z-score approach, the §7.18 calibration ceilings, and the §7.19 shadow-mode reporting metrics — all integrated above. The subreddit is **not recommended for ongoing monitoring.** Better sources for this project: r/algotrading, r/quant, QuantConnect forums.
 
 ## Appendix A: First Week, Concretely
 
